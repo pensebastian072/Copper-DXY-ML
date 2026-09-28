@@ -413,7 +413,8 @@ def backtest_explorer_page():
 
     cm = confusion_matrix(
         filtered_df['actual_direction'],
-        filtered_df['predicted_with_new_threshold']
+        filtered_df['predicted_with_new_threshold'],
+        labels=[0, 1],
     )
 
     fig = px.imshow(

@@ -143,7 +143,7 @@ def walk_forward_backtest(
     except Exception:
         overall_roc = float("nan")
 
-    cm = confusion_matrix(backtest_df["actual"], backtest_df["pred"])
+    cm = confusion_matrix(backtest_df["actual"], backtest_df["pred"], labels=[0, 1])
 
     # Cumulative accuracy over time
     backtest_df["correct"] = (backtest_df["pred"] == backtest_df["actual"]).astype(int)
@@ -352,7 +352,7 @@ def walk_forward_validation(
             roc_auc = np.nan
 
         # Confusion matrix elements
-        tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+        tn, fp, fn, tp = confusion_matrix(y_test, y_pred, labels=[0, 1]).ravel()
 
         # Store results for each test sample
         for i, (idx, row) in enumerate(test_data.iterrows()):
@@ -429,7 +429,8 @@ def calculate_overall_metrics(backtest_df: pd.DataFrame) -> Dict:
     # Confusion matrix
     tn, fp, fn, tp = confusion_matrix(
         backtest_df['actual_direction'],
-        backtest_df['predicted_direction']
+        backtest_df['predicted_direction'],
+        labels=[0, 1],
     ).ravel()
 
     # Rolling accuracy (6-month windows)
@@ -550,7 +551,8 @@ def create_backtest_plots(backtest_df: pd.DataFrame, output_dir: str):
     # 4. Confusion matrix
     cm = confusion_matrix(
         backtest_df['actual_direction'],
-        backtest_df['predicted_direction']
+        backtest_df['predicted_direction'],
+        labels=[0, 1],
     )
 
     sns.heatmap(
