@@ -1,5 +1,13 @@
 # Copper Brain v2 - Production-Grade Direction Forecasting
 
+<!-- one-tap-install -->
+[![Download ZIP](https://img.shields.io/badge/Download-ZIP-2ea44f?style=for-the-badge&logo=github)](https://github.com/pensebastian072/Copper-DXY-ML/archive/refs/heads/main.zip)
+
+**Run it on your computer in 3 steps:** 1) [download the ZIP](https://github.com/pensebastian072/Copper-DXY-ML/archive/refs/heads/main.zip) · 2) unzip it · 3) double-click **`install.bat`** (Windows) or run **`./install.sh`** (macOS/Linux).
+The Streamlit app opens in your browser at `http://127.0.0.1:8501` - it runs only on your machine. Next time use `start.bat` / `./start.sh`.
+The first run downloads market data from Yahoo Finance and trains the model (a few minutes).
+<!-- one-tap-install -->
+
 🧠 **AI-Powered Copper Price Direction Prediction** using XGBoost binary classification with walk-forward validation.
 
 ## Overview

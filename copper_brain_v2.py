@@ -1,100 +1,4 @@
 """
-Core training and backtest runner for Copper Brain v2.
-"""
-import os
-from datetime import datetime
-from typing import Tuple
-
-import pandas as pd
-import yfinance as yf
-
-from features import engineer_all_features
-from model_utils import walk_forward_backtest
-
-
-DATA_DIR = "data"
-OUTPUTS_DIR = "outputs"
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(OUTPUTS_DIR, exist_ok=True)
-
-
-def download_ticker(ticker: str, start: str, end: str) -> pd.DataFrame:
-    print(f"Downloading {ticker} from yfinance...")
-    df = yf.download(ticker, start=start, end=end, interval="1d", progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df.index = pd.to_datetime(df.index)
-    df.index = df.index.tz_localize(None) if df.index.tz is not None else df.index
-    price_col = "Adj Close" if "Adj Close" in df.columns else "Close"
-    df = df.rename(columns={price_col: "close"})
-    df = df[["close", "Open", "High", "Low", "Volume"]].dropna()
-    return df
-
-
-def fetch_all_data(start: str, end: str):
-    # Copper
-    copper = download_ticker("HG=F", start, end)
-
-    # DXY: try DX-Y.NYB then fallback to ^DXY
-    try:
-        dxy = download_ticker("DX-Y.NYB", start, end)
-    except Exception:
-        dxy = download_ticker("^DXY", start, end)
-
-    # Gold
-    gold = download_ticker("GC=F", start, end)
-
-    # Save raw data
-    copper.to_csv(os.path.join(DATA_DIR, "copper_raw.csv"))
-    dxy.to_csv(os.path.join(DATA_DIR, "dxy_raw.csv"))
-    gold.to_csv(os.path.join(DATA_DIR, "gold_raw.csv"))
-
-    return copper, dxy, gold
-
-
-def main():
-    start = "1990-01-01"
-    end = datetime.today().strftime("%Y-%m-%d")
-
-    copper, dxy, gold = fetch_all_data(start, end)
-
-    print("Engineering features...")
-    df, feature_cols = engineer_all_features(copper, dxy, gold, horizon_days=21)
-
-    target_col = "target_21d"
-
-    print(f"Features shape: {df.shape}, features count: {len(feature_cols)}")
-
-    print("Running walk-forward backtest...")
-    backtest_df, summary = walk_forward_backtest(
-        df=df,
-        feature_cols=feature_cols,
-        target_col=target_col,
-        train_years=5,
-        test_step_days=21,
-        model_params={
-            "n_estimators": 500,
-            "max_depth": 6,
-            "learning_rate": 0.03,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "objective": "binary:logistic",
-            "eval_metric": "logloss",
-        },
-        threshold=0.45,
-        outputs_path=OUTPUTS_DIR,
-    )
-
-    print("Backtest complete. Summary:")
-    for k, v in summary.items():
-        print(f"  {k}: {v}")
-
-    print(f"Saved backtest CSV to {os.path.join(OUTPUTS_DIR, 'backtest_results.csv')}")
-
-
-if __name__ == "__main__":
-    main()
-"""
 Copper Brain v2 - Production-Grade Copper Direction Predictor
 =============================================================
 Walk-forward validated XGBoost model for predicting 21-day copper price direction.
@@ -113,6 +17,7 @@ Usage:
 import os
 import sys
 from datetime import datetime
+from typing import Tuple
 import pandas as pd
 import numpy as np
 import yfinance as yf

@@ -26,7 +26,7 @@ def run_threshold_scan():
         prec = precision_score(df["actual"], preds, zero_division=0)
         rec = recall_score(df["actual"], preds, zero_division=0)
         f1 = f1_score(df["actual"], preds, zero_division=0)
-        cm = confusion_matrix(df["actual"], preds)
+        cm = confusion_matrix(df["actual"], preds, labels=[0, 1])
         rows.append({"threshold": float(thr), "accuracy": float(acc), "precision": float(prec), "recall": float(rec), "f1": float(f1), "tn": int(cm[0,0]), "fp": int(cm[0,1]), "fn": int(cm[1,0]), "tp": int(cm[1,1])})
 
     out = pd.DataFrame(rows)
