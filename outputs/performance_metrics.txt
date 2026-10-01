@@ -1,0 +1,26 @@
+COPPER BRAIN v2 - PERFORMANCE METRICS
+========================================
+
+Training completed: 2026-09-28 18:33:01
+
+CONFIGURATION:
+  Forecast Horizon: 21 days
+  Training Window: 5 years
+  Test Step: 21 days
+  Probability Threshold: 0.45
+
+OVERALL METRICS:
+  overall_accuracy: 0.5312
+  overall_precision: 0.5598
+  overall_recall: 0.7221
+  overall_f1: 0.6307
+  overall_roc_auc: 0.4835
+  true_positives: 2217
+  true_negatives: 725
+  false_positives: 1743
+  false_negatives: 853
+  total_predictions: 5538
+  positive_predictions: 3960
+  negative_predictions: 1578
+  actual_positives: 3070
+  actual_negatives: 2468

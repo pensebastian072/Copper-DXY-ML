@@ -1,6 +1,6 @@
 """
-Copper Brain v2 - Production-Grade Copper Direction Predictor
-=============================================================
+Copper Brain v2 - Copper Direction Model (research)
+===================================================
 Walk-forward validated XGBoost model for predicting 21-day copper price direction.
 
 Features:
@@ -8,7 +8,7 @@ Features:
 - Walk-forward rolling validation
 - Multi-asset alpha features (DXY, Gold)
 - Comprehensive feature engineering
-- Production-ready backtesting
+- Walk-forward backtest, compared with an always-up baseline
 
 Usage:
     python copper_brain_v2.py
@@ -174,12 +174,14 @@ def main():
     Main execution pipeline.
     """
     print("=" * 60)
-    print("COPPER BRAIN v2 - Production Direction Predictor")
+    print("COPPER BRAIN v2 - Copper Direction Model (research)")
     print("=" * 60)
     print(f"Forecast Horizon: {FORECAST_HORIZON_DAYS} days")
-    print(f"Training Window: {TRAIN_WINDOW_YEARS} years")
-    print(f"Test Step: {TEST_STEP_DAYS} days")
-    print(f"Probability Threshold: {PROBABILITY_THRESHOLD}")
+    # describe what actually runs: model_utils applies 5 x 252 as CALENDAR days, and 0.45
+    # means "use the threshold tuned on each training window"
+    print(f"Training Window: {TRAIN_WINDOW_YEARS} x 252 = {TRAIN_WINDOW_YEARS * 252} calendar days (~{TRAIN_WINDOW_YEARS * 252 / 365.25:.2f} years)")
+    print(f"Test Step: {TEST_STEP_DAYS} calendar days")
+    print(f"Probability Threshold: {'tuned per training window (0.35-0.65)' if PROBABILITY_THRESHOLD == 0.45 else PROBABILITY_THRESHOLD}")
     print()
 
     # Create output directories
@@ -266,9 +268,9 @@ def main():
         f.write(f"Training completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         f.write("CONFIGURATION:\n")
         f.write(f"  Forecast Horizon: {FORECAST_HORIZON_DAYS} days\n")
-        f.write(f"  Training Window: {TRAIN_WINDOW_YEARS} years\n")
-        f.write(f"  Test Step: {TEST_STEP_DAYS} days\n")
-        f.write(f"  Probability Threshold: {PROBABILITY_THRESHOLD}\n\n")
+        f.write(f"  Training Window: {TRAIN_WINDOW_YEARS} x 252 = {TRAIN_WINDOW_YEARS * 252} calendar days (~{TRAIN_WINDOW_YEARS * 252 / 365.25:.2f} years)\n")
+        f.write(f"  Test Step: {TEST_STEP_DAYS} calendar days\n")
+        f.write(f"  Probability Threshold: {'tuned per training window (0.35-0.65)' if PROBABILITY_THRESHOLD == 0.45 else PROBABILITY_THRESHOLD}\n\n")
         f.write("OVERALL METRICS:\n")
         for key, value in metrics.items():
             if isinstance(value, float):
@@ -278,8 +280,8 @@ def main():
 
     print(f"  Saved performance metrics to {metrics_path}")
 
-    # Step 6: Train final model for production
-    print("Step 6: Training final production model...")
+    # Step 6: Train the final model on all data (used by the dashboard)
+    print("Step 6: Training final model on all data...")
 
     final_model, final_threshold = train_final_model(
         processed_df,
@@ -309,7 +311,12 @@ def main():
     print("2. Check performance plots in outputs/backtest_summary_plots.png")
     print("3. Launch dashboard: streamlit run app.py")
     print()
-    print("🎯 Target KPI Achieved!" if metrics.get('overall_accuracy', 0) >= 0.60 else "⚠️  Target KPI Not Met - Consider parameter tuning")
+    # Report against the naive "always predict up" baseline - the bar a direction model must beat.
+    always_up = (float(backtest_df['actual_direction'].mean())
+                 if 'actual_direction' in backtest_df else float('nan'))
+    accuracy = metrics.get('overall_accuracy', 0)
+    print(f"Accuracy {accuracy:.1%} vs always-up {always_up:.1%} "
+          f"({'beats' if accuracy > always_up else 'does not beat'} the baseline)")
 
 
 if __name__ == "__main__":

@@ -113,7 +113,7 @@ def load_final_model():
 def overview_page():
     """Main overview page with key metrics."""
     st.markdown('<div class="main-header">🔮 Copper Brain v2</div>', unsafe_allow_html=True)
-    st.markdown("*Production-Grade Copper Direction Predictor*")
+    st.markdown("*Copper 21-day direction model - walk-forward results, compared with an always-up baseline*")
     st.markdown("---")
 
     # Load data
@@ -135,12 +135,15 @@ def overview_page():
     f1 = metrics.get('overall_f1', 0)
     roc_auc = metrics.get('overall_roc_auc', 0)
 
+    # Naive baseline: always predict "up". Green only if the model beats it.
+    always_up = float(backtest_df['actual_direction'].mean())
+
     with col1:
-        accuracy_class = "success-metric" if accuracy >= 0.60 else "warning-metric"
+        accuracy_class = "success-metric" if accuracy > always_up else "warning-metric"
         st.markdown(f"""
         <div class="metric-card {accuracy_class}">
             <div class="metric-value">{accuracy:.1%}</div>
-            <div class="metric-label">Directional Accuracy</div>
+            <div class="metric-label">Directional Accuracy (always-up: {always_up:.1%})</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -229,10 +232,10 @@ def overview_page():
 
     with col1:
         st.info(f"""
-        **Training Data**: {len(backtest_df)} predictions
+        **Out-of-sample predictions**: {len(backtest_df)}
         **Test Period**: {backtest_df['date'].min().strftime('%Y-%m-%d')} to {backtest_df['date'].max().strftime('%Y-%m-%d')}
         **Forecast Horizon**: 21 trading days
-        **Walk-Forward Windows**: 5-year training, 21-day steps
+        **Walk-Forward Windows**: 1,260-calendar-day (~3.45-year) training, 21-calendar-day steps
         """)
 
     with col2:
@@ -248,36 +251,39 @@ def overview_page():
     # Recent performance
     st.subheader("📈 Recent Performance")
 
-    # Last 6 months performance
-    recent_df = backtest_df[backtest_df['date'] >= (datetime.now() - timedelta(days=180))]
+    # Last 6 months of predictions (relative to the latest prediction, not today), compared with
+    # always predicting "up" over the same window - not with the model's own long-run average.
+    recent_df = backtest_df[backtest_df['date'] >= (backtest_df['date'].max() - timedelta(days=180))]
     if not recent_df.empty:
         recent_accuracy = accuracy_score(recent_df['actual_direction'], recent_df['predicted_direction'])
+        recent_always_up = float(recent_df['actual_direction'].mean())
 
         st.metric(
-            "Last 6 Months Accuracy",
+            f"Last 6 Months Accuracy (always-up: {recent_always_up:.1%})",
             f"{recent_accuracy:.1%}",
-            delta=f"{recent_accuracy - accuracy:.1%}"
+            delta=f"{recent_accuracy - recent_always_up:+.1%} vs always-up"
         )
 
     # Performance over time chart
     st.subheader("📉 Performance Over Time")
 
-    # Calculate rolling accuracy
+    # Rolling accuracy next to the naive "always predict up" baseline. (This used to plot a
+    # rolling *correlation* under an "accuracy" title, against a 60% target line.)
     backtest_df = backtest_df.sort_values('date')
-    backtest_df['rolling_accuracy'] = (
-        backtest_df.set_index('date')['predicted_direction']
-        .rolling('90D')
-        .corr(backtest_df.set_index('date')['actual_direction'])
-    )
+    bt = backtest_df.set_index('date')
+    rolling = pd.DataFrame({
+        'Model accuracy': (bt['predicted_direction'] == bt['actual_direction']).astype(float).rolling('90D', min_periods=40).mean(),
+        'Always-up accuracy': bt['actual_direction'].astype(float).rolling('90D', min_periods=40).mean(),
+    }).reset_index()
 
     fig = px.line(
-        backtest_df,
+        rolling,
         x='date',
-        y='rolling_accuracy',
-        title='90-Day Rolling Directional Accuracy',
-        labels={'rolling_accuracy': 'Accuracy', 'date': 'Date'}
+        y=['Model accuracy', 'Always-up accuracy'],
+        title='90-Day Rolling Directional Accuracy vs an always-up baseline',
+        labels={'value': 'Accuracy', 'date': 'Date', 'variable': ''}
     )
-    fig.add_hline(y=0.6, line_dash="dash", line_color="red", annotation_text="60% Target")
+    fig.add_hline(y=0.5, line_dash="dot", line_color="gray", annotation_text="coin flip")
     fig.update_layout(height=400)
 
     st.plotly_chart(fig, use_container_width=True)
@@ -324,16 +330,22 @@ def backtest_explorer_page():
             (filtered_df['date'].dt.date <= date_range[1])
         ]
 
-    if show_correct_only:
-        filtered_df = filtered_df[
-            filtered_df['actual_direction'] == filtered_df['predicted_direction']
-        ]
-
-    # Apply new threshold
+    # Accuracy is measured on the whole date range, before the "correct only" display filter
+    # (measuring after it inflated the number).
     filtered_df['predicted_with_new_threshold'] = (filtered_df['prediction_probability'] >= threshold).astype(int)
     new_accuracy = accuracy_score(filtered_df['actual_direction'], filtered_df['predicted_with_new_threshold'])
+    range_always_up = float(filtered_df['actual_direction'].mean()) if len(filtered_df) else 0.0
 
-    st.metric(f"Accuracy with {threshold:.0%} threshold", f"{new_accuracy:.1%}")
+    st.metric(f"Accuracy with {threshold:.0%} threshold (always-up: {range_always_up:.1%})",
+              f"{new_accuracy:.1%}",
+              delta=f"{new_accuracy - range_always_up:+.1%} vs always-up")
+
+    if show_correct_only:
+        filtered_df = filtered_df[
+            filtered_df['actual_direction'] == filtered_df['predicted_with_new_threshold']
+        ]
+        st.caption("Showing correct predictions only - the charts below (heatmap, confusion matrix) "
+                   "are then 100% correct by construction; the accuracy above uses all predictions.")
 
     # Direction vs Actual Chart
     st.subheader("📊 Prediction vs Actual Direction")
@@ -618,11 +630,12 @@ def recent_predictions_page():
         st.error("No backtest data available.")
         return
 
-    # Get recent predictions (last 30 days)
-    recent_df = backtest_df[backtest_df['date'] >= (datetime.now() - timedelta(days=30))].copy()
+    # Most recent 30 days of predictions, counted back from the latest prediction (not today:
+    # the 21-day target means the newest prediction is always weeks old).
+    recent_df = backtest_df[backtest_df['date'] >= (backtest_df['date'].max() - timedelta(days=30))].copy()
 
     if recent_df.empty:
-        st.warning("No predictions in the last 30 days.")
+        st.warning("No predictions in the 30 days before the latest prediction.")
         return
 
     # Format for display
@@ -637,7 +650,7 @@ def recent_predictions_page():
     def color_correct(val):
         return 'color: green' if val else 'color: red'
 
-    styled_df = display_df.style.applymap(color_correct, subset=['correct'])
+    styled_df = display_df.style.map(color_correct, subset=['correct'])  # applymap was removed in pandas 3
 
     st.dataframe(styled_df, use_container_width=True)
 
@@ -646,12 +659,17 @@ def recent_predictions_page():
 
     recent_accuracy = accuracy_score(recent_df['actual_direction'], recent_df['predicted_direction'])
 
+    recent_always_up = float(recent_df['actual_direction'].mean())
+
     with col1:
-        st.metric("Recent Accuracy (30 days)", f"{recent_accuracy:.1%}")
+        st.metric(f"Recent Accuracy (30 days, always-up: {recent_always_up:.1%})",
+                  f"{recent_accuracy:.1%}",
+                  delta=f"{recent_accuracy - recent_always_up:+.1%} vs always-up")
+        st.caption(f"{len(recent_df)} daily predictions of a 21-day move - about one independent outcome.")
 
     with col2:
         avg_probability = recent_df['prediction_probability'].mean()
-        st.metric("Avg Prediction Confidence", f"{avg_probability:.1%}")
+        st.metric("Avg predicted P(up)", f"{avg_probability:.1%}")
 
     with col3:
         total_predictions = len(recent_df)

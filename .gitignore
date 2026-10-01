@@ -49,7 +49,10 @@ pipfile.lock
 Thumbs.db
 
 # outputs and data
-outputs/
+outputs/*
+# the walk-forward evidence the README quotes is committed so it can be checked
+!outputs/backtest_results.csv
+!outputs/performance_metrics.txt
 data/
 
 # secrets
